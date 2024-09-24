@@ -3,6 +3,8 @@ import sqlite3
 from datetime import datetime
 import pandas as pd
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+import gspread
+from google.oauth2.service_account import Credentials
 from telegram.ext import Updater, ApplicationBuilder, CommandHandler, MessageHandler, filters, ContextTypes, CallbackContext, CallbackQueryHandler
 # from lockbox import get_lockbox_secret
 # from questions import QUESTIONS, IMAGES, number_of_questions_in_first_poll
@@ -16,7 +18,7 @@ file_name = 'списки.xlsx'
 async def start(update: Update, context: CallbackContext):
     user_id = update.effective_user.id
     username = update.effective_user.username
-    await update.message.reply_text("Привет! Сейчас начнется большой опрос. Пожалуйста, отвечайте честно и думайте перед выбором! Введите /poll_1_part, чтобы начать.")
+    await update.message.reply_text("Добрый день!")
     await choose_grade(update.message, user_id, context)
 
 async def choose_grade(message, user_id: int, context: ContextTypes.DEFAULT_TYPE):

@@ -13,11 +13,12 @@ class GoogleSheetsAPI:
     SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
 
     # The ID and range of a sample spreadsheet.
-    SPREADSHEET_ID = "1E1pBA89XGC1LB3SHVltPuDJeu1odE_BCOxQM_aNcXVs"
+    
     RANGE_OF_NAMES = "A:B"
 
-    def __init__(self):
+    def __init__(self, id="1xmhcDN0bROVfcnCFm2y7-VNnsgjtzhuwcWmMpmGjlK8"):
         creds = None
+        self.SPREADSHEET_ID = id
         # The file token.json stores the user's access and refresh tokens, and is
         # created automatically when the authorization flow completes for the first
         # time.
@@ -53,6 +54,25 @@ class GoogleSheetsAPI:
                 return
 
             return [f'{student[0]} {student[1]}' for student in students[1:]]
+        except HttpError as err:
+            print(err)
+
+    def get_timetable(self):
+        try:
+            service = build("sheets", "v4", credentials=self.creds)
+            sheet = service.spreadsheets()
+            result = (
+                sheet.values()
+                .get(spreadsheetId=self.SPREADSHEET_ID, range=f'Sheet1!A:D')
+                .execute()
+            )
+            students = result.get("values", [])
+
+            if not students:
+                print("No data found.")
+                return
+
+            return students[1:]
         except HttpError as err:
             print(err)
 

@@ -3,6 +3,7 @@ import subprocess
 from constants import DEBUG 
 
 def get_lockbox_secret(secret_name: str):
+    return '7907658286:AAFRA1vGrsFyaHlUGOuZUeE2LKUQDPZPyEM'
     command = f'{"yc" if DEBUG else "/home/phys-bot/yandex-cloud/bin/yc"} lockbox payload get {secret_name}' # TODO: разобраться с путем к yc на машинке
     try:
         result = subprocess.run(command, shell=True, check=True, text=True, capture_output=True)

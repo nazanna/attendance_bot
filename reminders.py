@@ -42,12 +42,12 @@ async def send_reminders(context: ContextTypes.DEFAULT_TYPE):
         await send_message(context, username)
         # del schedule_data[now]
 
-        round_up = 1
+        round_up = 5
         next_check = now + timedelta(minutes=round_up)
         next_check_time = next_check.replace(second=0, microsecond=0, minute=(next_check.minute // round_up) * round_up)
         print((next_check_time - now).total_seconds())
-        await asyncio.sleep(10)
-        # await asyncio.sleep((next_check_time - now).total_seconds())  # Check every 10 minutes
+        # await asyncio.sleep(10)
+        await asyncio.sleep((next_check_time - now).total_seconds())  # Check every 10 minutes
 
 def run_scheduler(context: ContextTypes.DEFAULT_TYPE):
     asyncio.run(send_reminders(context))

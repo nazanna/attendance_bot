@@ -1,5 +1,6 @@
 import logging
 import sqlite3
+import pytz
 from datetime import datetime
 import pandas as pd
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
@@ -7,6 +8,8 @@ from apscheduler.triggers.cron import CronTrigger
 from telegram import Update
 from telegram.ext import ApplicationBuilder, CommandHandler, CallbackContext
 import threading
+import locale
+from datetime import datetime, timedelta
 from fix import fix_handler
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from google.oauth2.service_account import Credentials
@@ -14,8 +17,8 @@ from telegram.ext import Updater, ApplicationBuilder, CommandHandler, MessageHan
 from lockbox import get_lockbox_secret
 # from questions import QUESTIONS, IMAGES, number_of_questions_in_first_poll
 from constants import token_key
-from reminders import send_reminders, run_scheduler
 import asyncio
+from google_sheets_api import GoogleSheetsAPI
 
 
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
@@ -25,7 +28,6 @@ file_name = 'списки.xlsx'
 
 async def start(update: Update, context: CallbackContext):
     user_id = update.effective_user.id
-    print(user_id)
     chat_id = update.effective_chat.id
     username = update.effective_user.username
     context.user_data['last_message'] = update.message
@@ -34,6 +36,60 @@ async def start(update: Update, context: CallbackContext):
     await choose_subject(update.message)
     asyncio.create_task(send_reminders(context))
 
+async def send_reminders(context: ContextTypes.DEFAULT_TYPE):
+    schedule_data = make_timetable()
+    now = datetime.now(pytz.timezone('Europe/Moscow'))
+    next_check = now + timedelta(minutes=5)
+    next_check_time = next_check.replace(second=0, microsecond=0, minute=(next_check.minute // 5) * 5)
+    await asyncio.sleep((next_check_time - now).total_seconds()) 
+
+    while True:
+        now = datetime.now(pytz.timezone('Europe/Moscow'))
+        current_hour = now.strftime('%H')  # Часы
+        current_minute = now.strftime('%M') 
+        now = str(current_hour)+':'+str(current_minute)
+        if now in schedule_data:
+            usernames = schedule_data[now]
+            for username in usernames:
+                await context.bot.send_message(chat_id=username, text='Отметьте посещаемость на занятии! Для этого нужно нажать /start')
+        next_check = now + timedelta(minutes=5)
+        next_check_time = next_check.replace(second=0, microsecond=0, minute=(next_check.minute // 5) * 5)
+        await asyncio.sleep((next_check_time - now).total_seconds())  # Check every 5 minutes
+
+
+def make_timetable():
+    api = GoogleSheetsAPI(id = '1-y3cE_AIhA8VuRkax-E9-4mSWo4UpnPyxWeFvERHLM4')
+    timetamble = api.get_timetable()
+    df = pd.DataFrame(timetamble, columns=['day', 'time', 'name', 'username'])
+    today = datetime.today()
+    day_of_week = today.weekday()
+    days = ["пн", "вт", "ср", "чт", "пт", "сб", "вс"]
+    # today = days[day_of_week]
+    today = 'вт'
+    today_timetable = df[df['day']==today]
+    map_timetable_today = {}
+    for index, row in today_timetable.iterrows():
+        if row['username']:
+            username = str(row['username'])[1:]
+            conn = sqlite3.connect('user_ids.db')
+            cursor = conn.cursor()
+            cursor.execute("""
+            SELECT chat_id
+            FROM ids 
+            WHERE username = ?
+            ORDER BY updated_at DESC
+            LIMIT 1
+        """, [username])
+            result = cursor.fetchone()
+            if result:
+                answer = result[0]
+
+                if row['time'] not in map_timetable_today:
+                    map_timetable_today[row['time']]=[answer]
+                else:
+                    map_timetable_today[row['time']].append(answer)
+    # print("Сегодня:", days[day_of_week])
+    # print(df)
 
 async def identify_chat(user_id, chat_id, username):
     conn = sqlite3.connect('user_ids.db')
@@ -57,7 +113,6 @@ async def choose_subject(message):
     await message.reply_text('Выберите вид занятия', reply_markup=reply_markup)
 
 async def choose_grade(message, user_id: int, context: ContextTypes.DEFAULT_TYPE):
-            questions_1 = ['Выберите класс']
             keyboard = [
                 [InlineKeyboardButton("7", callback_data=f"response_grade_7"),
                 InlineKeyboardButton("8", callback_data=f"response_grade_8"),
@@ -121,17 +176,12 @@ def make_sheet_name(context):
     return sheet_name
 
 def make_list_kids(context):
-    sheet_name = make_sheet_name(context)
-    df = pd.read_excel(file_name, sheet_name=sheet_name)
-    surnames = df['Фамилия'].tolist()
-    names = df['Имя'].tolist()
-    questions = [surnames[i]+' '+names[i] for i in range(len(surnames))]
-    return questions
-
+    api = GoogleSheetsAPI()
+    return api.get_list_of_students(make_sheet_name(context))
 
 async def check_attendance(message, user_id: int, context: ContextTypes.DEFAULT_TYPE):
     question_index = context.user_data['question_index']
-    questions = make_list_kids(context)
+    questions = context.user_data['list']
     keyboard = [
                 [InlineKeyboardButton("Присутствует", callback_data=f"response_{question_index}_1"),
                 InlineKeyboardButton("Отсутствует", callback_data=f"response_{question_index}_0")],
@@ -156,11 +206,10 @@ async def save_attendance(user_id, username, question_index, name, answer):
 def make_norm_data(context, user_id):
     sheet_name = make_sheet_name(context)
     current_date_str = datetime.now().strftime("%d %m")
-    df = pd.read_excel(file_name, sheet_name=sheet_name)
-    df[current_date_str] = 0
     conn = sqlite3.connect('attendance.db')
     cursor = conn.cursor()
-    names = make_list_kids(context)
+    names = context.user_data['list']
+    att = []
     for name_num in range(len(names)):
         name = names[name_num]
         cursor.execute("""
@@ -173,9 +222,9 @@ def make_norm_data(context, user_id):
         result = cursor.fetchone()
         if result:
             answer = result[0]
-        df.at[name_num, current_date_str] = answer
-    with pd.ExcelWriter(file_name, engine='openpyxl', mode='a', if_sheet_exists='overlay') as writer:
-        df.to_excel(writer, sheet_name=sheet_name, index=False)
+        att.append(answer)
+    api = GoogleSheetsAPI()
+    api.insert_attendance(sheet_name, att)
     conn.close()
     print(current_date_str)
 
@@ -219,15 +268,16 @@ async def button(update: Update, context: CallbackContext):
         case 'group':
             context.user_data['group'] = response
             context.user_data['question_index'] = 0
+            context.user_data['list'] = make_list_kids(context)
             await check_attendance(query.message, user_id, context)
         
         case _:
-            await save_attendance(user_id, username, int(question), make_list_kids(context)[int(question)], int(response))
+            await save_attendance(user_id, username, int(question), context.user_data['list'][int(question)], int(response))
             context.user_data['question_index'] += 1
-            if context.user_data['question_index']<len(make_list_kids(context)):
+            if context.user_data['question_index']<len(context.user_data['list']):
                 await check_attendance(query.message, user_id, context)
             else: 
-                await query.message.reply_text("Ура! Спасибо, что отметили посещаемость!")
+                await query.message.reply_text("Спасибо, что отметили посещаемость! Этот котик очень этому рад!")
                 with open("final.jpg", "rb") as image:
                     await query.message.reply_photo(photo=image)
                 make_norm_data(context, user_id)

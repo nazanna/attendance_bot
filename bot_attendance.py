@@ -31,7 +31,7 @@ async def start(update: Update, context: CallbackContext):
     context.user_data['last_message'] = update.message
     await update.message.reply_text("Добрый день!")
     await identify_chat(user_id, chat_id, username)
-    await choose_grade(update.message, user_id, context)
+    await choose_subject(update.message)
     asyncio.create_task(send_reminders(context))
 
 

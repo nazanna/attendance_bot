@@ -1,12 +1,11 @@
 import re
 from telegram import Update
-from telegram.ext import Updater, CommandHandler, MessageHandler, Filters, CallbackContext, ConversationHandler, \
+from telegram.ext import Updater, CommandHandler, MessageHandler, filters, CallbackContext, ConversationHandler, \
     ApplicationBuilder
 
 # Define the states for the conversation
 WAITING_FOR_MESSAGE = 0
 
-# Define your regular expression pattern here
 EXPECTED_FORMAT = r'^([а-яА-ЯёЁ]+)\s+([а-яА-ЯёЁ]+)\s+([а-яА-ЯёЁ0-9_]+)\s+(Да|Нет)$'
 
 
@@ -38,30 +37,10 @@ async def cancel(update: Update, context: CallbackContext) -> int:
     await update.message.reply_text('Operation cancelled.')
     return ConversationHandler.END
 
-
-def main() -> None:
-    """Start the bot."""
-    # Replace 'YOUR_TOKEN_HERE' with your actual bot token
-    application = ApplicationBuilder().token("YOUR_TOKEN_HERE").build()
-
-    # Get the dispatcher to register handlers
-
-    # Define the conversation handler with the states
-    conv_handler = ConversationHandler(
-        entry_points=[CommandHandler("fix", fix)],
-        states={
-            WAITING_FOR_MESSAGE: [MessageHandler(Filters.text & ~Filters.command, check_message)],
-        },
-        fallbacks=[CommandHandler("cancel", cancel)]
-    )
-
-    # Add the conversation handler to the dispatcher
-    application.add_handler(conv_handler)
-
-    # Start the Bot
-    application.run_polling()
-
-
-
-if __name__ == '__main__':
-    main()
+fix_handler = ConversationHandler(
+    entry_points=[CommandHandler("fix", fix)],
+    states={
+        WAITING_FOR_MESSAGE: [MessageHandler(filters.TEXT & ~filters.COMMAND, check_message)],
+    },
+    fallbacks=[CommandHandler("cancel", cancel)]
+)

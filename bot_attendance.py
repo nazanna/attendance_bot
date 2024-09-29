@@ -6,31 +6,34 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 from telegram import Update
 from telegram.ext import ApplicationBuilder, CommandHandler, CallbackContext
-import asyncio
 import threading
-import schedule
-import time
+from fix import fix_handler
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-import gspread
 from google.oauth2.service_account import Credentials
 from telegram.ext import Updater, ApplicationBuilder, CommandHandler, MessageHandler, filters, ContextTypes, CallbackContext, CallbackQueryHandler
-# from lockbox import get_lockbox_secret
+from lockbox import get_lockbox_secret
 # from questions import QUESTIONS, IMAGES, number_of_questions_in_first_poll
-# from constants import users_db_name, responses_db_name, token_key
+from constants import token_key
+from reminders import send_reminders, run_scheduler
+import asyncio
+
 
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
                     level=logging.WARNING)
-token = '7907658286:AAFRA1vGrsFyaHlUGOuZUeE2LKUQDPZPyEM'
+token = 'attendance-bot-test-token'
 file_name = 'списки.xlsx'
 
 async def start(update: Update, context: CallbackContext):
     user_id = update.effective_user.id
+    print(user_id)
     chat_id = update.effective_chat.id
     username = update.effective_user.username
     context.user_data['last_message'] = update.message
     await update.message.reply_text("Добрый день!")
     await identify_chat(user_id, chat_id, username)
     await choose_grade(update.message, user_id, context)
+    asyncio.create_task(send_reminders(context))
+
 
 async def identify_chat(user_id, chat_id, username):
     conn = sqlite3.connect('user_ids.db')
@@ -55,6 +58,7 @@ async def choose_grade(message, user_id: int, context: ContextTypes.DEFAULT_TYPE
             ]
             reply_markup = InlineKeyboardMarkup(keyboard)
             await message.reply_text('Выберите класс', reply_markup=reply_markup)
+
 
 async def choose_group(message, user_id: int, context: ContextTypes.DEFAULT_TYPE):
             keyboard = [
@@ -101,6 +105,7 @@ def make_list_kids(context):
     questions = [surnames[i]+' '+names[i] for i in range(len(surnames))]
     return questions
 
+
 async def check_attendance(message, user_id: int, context: ContextTypes.DEFAULT_TYPE):
     question_index = context.user_data['question_index']
     questions = make_list_kids(context)
@@ -110,6 +115,7 @@ async def check_attendance(message, user_id: int, context: ContextTypes.DEFAULT_
             ]
     reply_markup = InlineKeyboardMarkup(keyboard)
     await message.reply_text(questions[question_index], reply_markup=reply_markup)
+
 
 async def save_group(user_id: int, username: str, grade: int, group: int):
     conn = sqlite3.connect('current_group.db')
@@ -133,6 +139,7 @@ async def save_group(user_id: int, username: str, grade: int, group: int):
 """, (group, user_id))
     conn.commit()
     conn.close()
+
 
 async def save_attendance(user_id, username, question_index, name, answer):
     conn = sqlite3.connect('attendance.db')
@@ -172,7 +179,6 @@ def make_norm_data(context, user_id):
         df.to_excel(writer, sheet_name=sheet_name, index=False)
     conn.close()
     print(current_date_str)
-
 
 
 async def button(update: Update, context: CallbackContext):
@@ -229,14 +235,13 @@ async def button(update: Update, context: CallbackContext):
 
 
 def main():
-    # token = get_lockbox_secret(token_key)
+    token = get_lockbox_secret(token_key)
     app = ApplicationBuilder().token(token).build()
     print("Bot successfully started!")
     app.add_handler(CommandHandler('start', start))
+    app.add_handler(fix_handler)
     app.add_handler(CallbackQueryHandler(button))
     app.run_polling()
-    thread = threading.Thread(target=schedule_messages)
-    thread.start()
 
     app.idle()
 

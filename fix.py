@@ -2,7 +2,7 @@ import re
 from telegram import Update
 from telegram.ext import Updater, CommandHandler, MessageHandler, filters, CallbackContext, ConversationHandler, \
     ApplicationBuilder
-
+from google_sheets_api import GoogleSheetsAPI
 # Define the states for the conversation
 WAITING_FOR_MESSAGE = 0
 
@@ -12,21 +12,42 @@ EXPECTED_FORMAT = r'^([а-яА-ЯёЁ]+)\s+([а-яА-ЯёЁ]+)\s+([а-яА-Яё�
 async def fix(update: Update, context: CallbackContext) -> int:
     """Start the fix command and ask for the user's message."""
     await update.message.reply_text(
-        'Введите данные ученика, посещаемость которого вы хотите исправить. \
-        Сделайте это в следующем формате: "Фамилия Имя Группа Да/Нет" \
-        (в зависимости от того, посетил ученик занятие или нет). Например: Иванов Иван 8_2 Нет. \
-        Обратите внимание, что фамилия и имя ученика должны точно совпадать с тем, как они записаны в списке.')
+        '''Введите данные ученика, посещаемость которого вы хотите исправить. \
+Сделайте это в следующем формате: "Фамилия Имя Группа Да/Нет" \
+(в зависимости от того, посетил ученик занятие или нет). Например: Иванов Иван 8_2 Нет. \
+Обратите внимание, что фамилия и имя ученика должны точно совпадать с тем, как они записаны в списке.''')
     return WAITING_FOR_MESSAGE
 
+
+async def index_of_student_in_group(group, first_name, last_name) -> int:
+    fullname = f'{last_name} {first_name}'
+    api = GoogleSheetsAPI()
+    students = api.get_list_of_students(group)
+    try:
+        return students.index(fullname)
+    except ValueError:
+        return -1
+        
 
 async def check_message(update: Update, context: CallbackContext) -> int:
     """Check the user's message and respond accordingly."""
     user_message = update.message.text
+    match = re.search(EXPECTED_FORMAT, user_message)
 
-    if re.match(EXPECTED_FORMAT, user_message):
-        await update.message.reply_text("Everything alright!")
+    if match:
+        last_name = match.group(1)
+        first_name = match.group(2)
+        group = match.group(3)
+        new_value = match.group(4) 
+        index_of_student = await index_of_student_in_group(group, first_name, last_name)
+        if index_of_student == -1:
+            await update.message.reply_text("Такого ученика или группы не существует")
+        else:
+            api = GoogleSheetsAPI()
+            api.update_last_attendance(group, index_of_student + 2, 1 if new_value=="Да" else 0)
+            await update.message.reply_text("Исправлено!")
     else:
-        await update.message.reply_text("Please rewrite your message in the expected format.")
+        await update.message.reply_text("Пожалуйста, повторите отправку сообщения в правильном формате.")
 
     # End the conversation after processing the message
     return ConversationHandler.END

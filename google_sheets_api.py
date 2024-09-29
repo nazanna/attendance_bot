@@ -38,7 +38,7 @@ class GoogleSheetsAPI:
                 token.write(creds.to_json())
         self.creds = creds
 
-    def get_list_of_students(self, group_name: str):
+    async def get_list_of_students(self, group_name: str):
         try:
             service = build("sheets", "v4", credentials=self.creds)
             sheet = service.spreadsheets()
@@ -57,7 +57,7 @@ class GoogleSheetsAPI:
         except HttpError as err:
             print(err)
 
-    def get_timetable(self):
+    async def get_timetable(self):
         try:
             service = build("sheets", "v4", credentials=self.creds)
             sheet = service.spreadsheets()
@@ -76,10 +76,10 @@ class GoogleSheetsAPI:
         except HttpError as err:
             print(err)
 
-    def insert_attendance(self, group_name: str, attendance: list):
+    async def insert_attendance(self, group_name: str, attendance: list):
         try:
             service = build("sheets", "v4", credentials=self.creds)
-            column_to_insert_attendance = self._get_first_empty_column(group_name)
+            column_to_insert_attendance = await self._get_first_empty_column(group_name)
             attendance_range = f'{group_name}!{column_to_insert_attendance}:{column_to_insert_attendance}'
             attendance_formatted = [[datetime.now().strftime("%d %m")]] + [[str(a)] for a in attendance]
             service.spreadsheets().values().update(
@@ -93,7 +93,31 @@ class GoogleSheetsAPI:
         except HttpError as err:
             print(err)
 
-    def _get_first_empty_column(self, group_name: str):
+
+    async def update_last_attendance(self, sheet_name: str, index: int, new_value: int):
+        try:
+            service = build("sheets", "v4", credentials=self.creds)
+            column_to_insert_attendance = await self._get_last_filled_column(sheet_name)
+            service.spreadsheets().values().update(
+                spreadsheetId=self.SPREADSHEET_ID,
+                range=f'{sheet_name}!{column_to_insert_attendance}{index}',
+                valueInputOption='RAW',  # or 'USER_ENTERED'
+                body={
+                    'values': [[new_value]]
+                }
+            ).execute()
+        except HttpError as err:
+            print(err)
+
+    async def _index_to_column_letter(self, index):
+        letter = ''
+        while index > 0:
+            index, remainder = divmod(index - 1, 26)
+            letter = chr(65 + remainder) + letter  # 65 is the ASCII value for 'A'
+        return letter
+
+
+    async def _get_first_empty_column_index(self, group_name: str):
         try:
             service = build("sheets", "v4", credentials=self.creds)
             # Call the Sheets API
@@ -104,24 +128,23 @@ class GoogleSheetsAPI:
 
             row_values = result.get('values', [])[0] if 'values' in result else []
 
-            def _index_to_column_letter(index):
-                letter = ''
-                while index > 0:
-                    index, remainder = divmod(index - 1, 26)
-                    letter = chr(65 + remainder) + letter  # 65 is the ASCII value for 'A'
-                return letter
-
-            return _index_to_column_letter(len(row_values) + 1)
+            return len(row_values) + 1
 
         except HttpError as err:
             print(err)
 
 
-def main():
-    api = GoogleSheetsAPI()
-    # print(api.get_list_of_students(class_number=8, group_number=2))
-    print(api.insert_attendance("8_2", [1, 1, 0]))
+    async def _get_first_empty_column(self, group_name: str):
+        return await self._index_to_column_letter(await self._get_first_empty_column_index(group_name))
+
+    async def _get_last_filled_column(self, group_name: str):
+        return await self._index_to_column_letter(await self._get_first_empty_column_index(group_name) - 1)
+
+# def main():
+#     api = GoogleSheetsAPI()
+#     # print(api.get_list_of_students(class_number=8, group_number=2))
+#     print(api.insert_attendance("8_2", [1, 1, 0]))
 
 
-if __name__ == "__main__":
-    main()
+# if __name__ == "__main__":
+#     main()

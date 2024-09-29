@@ -16,7 +16,7 @@ from google.oauth2.service_account import Credentials
 from telegram.ext import Updater, ApplicationBuilder, CommandHandler, MessageHandler, filters, ContextTypes, CallbackContext, CallbackQueryHandler
 from lockbox import get_lockbox_secret
 # from questions import QUESTIONS, IMAGES, number_of_questions_in_first_poll
-from constants import token_key
+from constants import token_key, started
 import asyncio
 from google_sheets_api import GoogleSheetsAPI
 
@@ -27,6 +27,7 @@ token = 'attendance-bot-test-token'
 file_name = 'списки.xlsx'
 
 async def start(update: Update, context: CallbackContext):
+    global started
     user_id = update.effective_user.id
     chat_id = update.effective_chat.id
     username = update.effective_user.username
@@ -34,38 +35,42 @@ async def start(update: Update, context: CallbackContext):
     await update.message.reply_text("Добрый день!")
     await identify_chat(user_id, chat_id, username)
     await choose_subject(update.message)
-    asyncio.create_task(send_reminders(context))
+    if update.effective_user.username in ['andr_zhi', 'nazanna25'] and not started:
+        asyncio.create_task(send_reminders(context.bot))
+        started = True
 
-async def send_reminders(context: ContextTypes.DEFAULT_TYPE):
-    schedule_data = make_timetable()
+
+async def send_reminders(bot):
+    round_up = 1
+    schedule_data = await make_timetable()
     now = datetime.now(pytz.timezone('Europe/Moscow'))
-    next_check = now + timedelta(minutes=5)
-    next_check_time = next_check.replace(second=0, microsecond=0, minute=(next_check.minute // 5) * 5)
+    next_check = now + timedelta(minutes=round_up)
+    next_check_time = next_check.replace(second=0, microsecond=0, minute=(next_check.minute // round_up) * round_up)
     await asyncio.sleep((next_check_time - now).total_seconds()) 
-
+    print(schedule_data)
     while True:
         now = datetime.now(pytz.timezone('Europe/Moscow'))
         current_hour = now.strftime('%H')  # Часы
         current_minute = now.strftime('%M') 
-        now = str(current_hour)+':'+str(current_minute)
-        if now in schedule_data:
-            usernames = schedule_data[now]
+        now_str = str(current_hour)+'.'+str(current_minute)
+        if now_str == "00.00":
+            schedule_data = await make_timetable()
+        if now_str in schedule_data:
+            usernames = schedule_data[now_str]
             for username in usernames:
-                await context.bot.send_message(chat_id=username, text='Отметьте посещаемость на занятии! Для этого нужно нажать /start')
-        next_check = now + timedelta(minutes=5)
-        next_check_time = next_check.replace(second=0, microsecond=0, minute=(next_check.minute // 5) * 5)
+                await bot.send_message(chat_id=username, text='Отметьте посещаемость на занятии! Для этого нужно нажать /start')
+        next_check = now + timedelta(minutes=round_up)
+        next_check_time = next_check.replace(second=0, microsecond=0, minute=(next_check.minute // round_up) * round_up)
         await asyncio.sleep((next_check_time - now).total_seconds())  # Check every 5 minutes
 
 
-def make_timetable():
+async def make_timetable():
     api = GoogleSheetsAPI(id = '1-y3cE_AIhA8VuRkax-E9-4mSWo4UpnPyxWeFvERHLM4')
-    timetamble = api.get_timetable()
+    timetamble = await api.get_timetable()
     df = pd.DataFrame(timetamble, columns=['day', 'time', 'name', 'username'])
-    today = datetime.today()
-    day_of_week = today.weekday()
+    day_of_week = datetime.now(pytz.timezone('Europe/Moscow')).weekday()
     days = ["пн", "вт", "ср", "чт", "пт", "сб", "вс"]
-    # today = days[day_of_week]
-    today = 'вт'
+    today = days[day_of_week]
     today_timetable = df[df['day']==today]
     map_timetable_today = {}
     for index, row in today_timetable.iterrows():
@@ -88,8 +93,7 @@ def make_timetable():
                     map_timetable_today[row['time']]=[answer]
                 else:
                     map_timetable_today[row['time']].append(answer)
-    # print("Сегодня:", days[day_of_week])
-    # print(df)
+    return map_timetable_today
 
 async def identify_chat(user_id, chat_id, username):
     conn = sqlite3.connect('user_ids.db')
@@ -101,6 +105,8 @@ async def identify_chat(user_id, chat_id, username):
     print('here')
     conn.commit()
     conn.close()
+
+
 async def choose_subject(message):
     keyboard = [
                 [InlineKeyboardButton("Профильный семинар", callback_data=f"response_subject_1")],
@@ -111,6 +117,7 @@ async def choose_subject(message):
             ]
     reply_markup = InlineKeyboardMarkup(keyboard)
     await message.reply_text('Выберите вид занятия', reply_markup=reply_markup)
+
 
 async def choose_grade(message, user_id: int, context: ContextTypes.DEFAULT_TYPE):
             keyboard = [
@@ -152,7 +159,7 @@ async def choose_group(message, user_id: int, context: ContextTypes.DEFAULT_TYPE
             reply_markup = InlineKeyboardMarkup(keyboard)
             await message.reply_text('Выберите группу', reply_markup=reply_markup)
 
-def make_sheet_name(context):
+async def make_sheet_name(context):
     subject = context.user_data['subject']
     match subject:
         case 1:
@@ -175,9 +182,11 @@ def make_sheet_name(context):
             sheet_name = 'Преподготовка к IPhO'
     return sheet_name
 
-def make_list_kids(context):
+
+async def make_list_kids(context):
     api = GoogleSheetsAPI()
-    return api.get_list_of_students(make_sheet_name(context))
+    return await api.get_list_of_students(await make_sheet_name(context))
+
 
 async def check_attendance(message, user_id: int, context: ContextTypes.DEFAULT_TYPE):
     question_index = context.user_data['question_index']
@@ -188,8 +197,6 @@ async def check_attendance(message, user_id: int, context: ContextTypes.DEFAULT_
             ]
     reply_markup = InlineKeyboardMarkup(keyboard)
     await message.reply_text(questions[question_index], reply_markup=reply_markup)
-
-
 
 
 async def save_attendance(user_id, username, question_index, name, answer):
@@ -203,8 +210,8 @@ async def save_attendance(user_id, username, question_index, name, answer):
     conn.close()
 
 
-def make_norm_data(context, user_id):
-    sheet_name = make_sheet_name(context)
+async def make_norm_data(context, user_id):
+    sheet_name = await make_sheet_name(context)
     current_date_str = datetime.now().strftime("%d %m")
     conn = sqlite3.connect('attendance.db')
     cursor = conn.cursor()
@@ -224,7 +231,7 @@ def make_norm_data(context, user_id):
             answer = result[0]
         att.append(answer)
     api = GoogleSheetsAPI()
-    api.insert_attendance(sheet_name, att)
+    await api.insert_attendance(sheet_name, att)
     conn.close()
     print(current_date_str)
 
@@ -251,9 +258,11 @@ async def button(update: Update, context: CallbackContext):
                     await choose_group(query.message, user_id, context)
                 case 4:
                     context.user_data['question_index'] = 0
+                    context.user_data['list'] = await make_list_kids(context)
                     await check_attendance(query.message, user_id, context)
                 case 5:
                     context.user_data['question_index'] = 0
+                    context.user_data['list'] = await make_list_kids(context)
                     await check_attendance(query.message, user_id, context)
 
         case 'grade':
@@ -268,7 +277,7 @@ async def button(update: Update, context: CallbackContext):
         case 'group':
             context.user_data['group'] = response
             context.user_data['question_index'] = 0
-            context.user_data['list'] = make_list_kids(context)
+            context.user_data['list'] = await make_list_kids(context)
             await check_attendance(query.message, user_id, context)
         
         case _:
@@ -280,29 +289,8 @@ async def button(update: Update, context: CallbackContext):
                 await query.message.reply_text("Спасибо, что отметили посещаемость! Этот котик очень этому рад!")
                 with open("final.jpg", "rb") as image:
                     await query.message.reply_photo(photo=image)
-                make_norm_data(context, user_id)
+                await make_norm_data(context, user_id)
         
-
-# def send_message(context: CallbackContext):
-#     chat_id = ''
-#     last_message = context.user_data.get('last_message')
-#     if chat_id is not None:
-#         last_message.reply_text("Запланированное сообщение!")
-
-# def schedule_messages():
-#     # Пример: отправка сообщений по дням недели
-#     schedule.every().monday.at("09:00").do(send_message, "Сообщение на понедельник!")
-#     schedule.every().tuesday.at("09:00").do(send_message, "Сообщение на вторник!")
-#     schedule.every().wednesday.at("09:00").do(send_message, "Сообщение на среду!")
-#     schedule.every().thursday.at("09:00").do(send_message, "Сообщение на четверг!")
-#     schedule.every().friday.at("09:00").do(send_message, "Сообщение на пятницу!")
-
-#     while True:
-#         schedule.run_pending()
-#         time.sleep(1)
-
-
-
 
 def main():
     token = get_lockbox_secret(token_key)

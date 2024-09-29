@@ -1,7 +1,7 @@
 import sqlite3
-
+from constants import workdir
 # Создаем или открываем базу данных
-conn = sqlite3.connect('current_group.db')
+conn = sqlite3.connect(f'{workdir}/current_group.db')
 cursor = conn.cursor()
 
 # Создаем таблицу, если она не существует

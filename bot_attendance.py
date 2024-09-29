@@ -3,28 +3,21 @@ import sqlite3
 import pytz
 from datetime import datetime
 import pandas as pd
-from apscheduler.schedulers.asyncio import AsyncIOScheduler
-from apscheduler.triggers.cron import CronTrigger
 from telegram import Update
 from telegram.ext import ApplicationBuilder, CommandHandler, CallbackContext
-import threading
-import locale
 from datetime import datetime, timedelta
 from fix import fix_handler
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from google.oauth2.service_account import Credentials
 from telegram.ext import Updater, ApplicationBuilder, CommandHandler, MessageHandler, filters, ContextTypes, CallbackContext, CallbackQueryHandler
 from lockbox import get_lockbox_secret
 # from questions import QUESTIONS, IMAGES, number_of_questions_in_first_poll
-from constants import token_key, started
+from constants import token_key, started, workdir
 import asyncio
 from google_sheets_api import GoogleSheetsAPI
 
 
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
                     level=logging.WARNING)
-token = 'attendance-bot-test-token'
-file_name = 'списки.xlsx'
 
 async def start(update: Update, context: CallbackContext):
     global started
@@ -76,7 +69,7 @@ async def make_timetable():
     for index, row in today_timetable.iterrows():
         if row['username']:
             username = str(row['username'])[1:]
-            conn = sqlite3.connect('user_ids.db')
+            conn = sqlite3.connect(f'{workdir}/user_ids.db')
             cursor = conn.cursor()
             cursor.execute("""
             SELECT chat_id
@@ -96,7 +89,7 @@ async def make_timetable():
     return map_timetable_today
 
 async def identify_chat(user_id, chat_id, username):
-    conn = sqlite3.connect('user_ids.db')
+    conn = sqlite3.connect(f'{workdir}/user_ids.db')
     cursor = conn.cursor()
     cursor.execute('''
             INSERT INTO ids (user_id, chat_id, username) 
@@ -200,7 +193,7 @@ async def check_attendance(message, user_id: int, context: ContextTypes.DEFAULT_
 
 
 async def save_attendance(user_id, username, question_index, name, answer):
-    conn = sqlite3.connect('attendance.db')
+    conn = sqlite3.connect(f'{workdir}/attendance.db')
     cursor = conn.cursor()
     cursor.execute('''
             INSERT INTO attendance (user_id, username, question_index, name, answer) 
@@ -213,7 +206,7 @@ async def save_attendance(user_id, username, question_index, name, answer):
 async def make_norm_data(context, user_id):
     sheet_name = await make_sheet_name(context)
     current_date_str = datetime.now().strftime("%d %m")
-    conn = sqlite3.connect('attendance.db')
+    conn = sqlite3.connect(f'{workdir}/attendance.db')
     cursor = conn.cursor()
     names = context.user_data['list']
     att = []
@@ -287,7 +280,7 @@ async def button(update: Update, context: CallbackContext):
                 await check_attendance(query.message, user_id, context)
             else: 
                 await query.message.reply_text("Спасибо, что отметили посещаемость! Этот котик очень этому рад!")
-                with open("final.jpg", "rb") as image:
+                with open(f"{workdir}/final.jpg", "rb") as image:
                     await query.message.reply_photo(photo=image)
                 await make_norm_data(context, user_id)
         

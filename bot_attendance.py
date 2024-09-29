@@ -221,7 +221,9 @@ async def button(update: Update, context: CallbackContext):
             if context.user_data['question_index']<len(make_list_kids(context)):
                 await check_attendance(query.message, user_id, context)
             else: 
-                await query.message.reply_text("Ура! Вы отметили посещаемость!")
+                await query.message.reply_text("Ура! Спасибо, что отметили посещаемость!")
+                with open("final.jpg", "rb") as image:
+                    await query.message.reply_photo(photo=image)
                 make_norm_data(context, user_id)
         
 

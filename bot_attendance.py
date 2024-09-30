@@ -128,9 +128,22 @@ async def choose_grade(message, user_id: int, context: ContextTypes.DEFAULT_TYPE
 
 async def choose_group(message, user_id: int, context: ContextTypes.DEFAULT_TYPE):
             if context.user_data['subject'] == 1:
+                match context.user_data['grade']:
+                    case 7:
+                        name1 = 'Безбородов '
+                        name2 = 'Черникова '
+                    case 8:
+                        name1 = 'Вахитов '
+                        name2 = 'Степушин/Черников ' 
+                    case 9:
+                        name1 = 'Бердникова/Тясин '
+                        name2 = 'Степушин/Черников '
+                    case 10:
+                        name1 = 'Бердникова/Гук '
+                        name2 = 'Пивоварчик '
                 keyboard = [
-                    [InlineKeyboardButton("1", callback_data=f"response_group_1"),
-                    InlineKeyboardButton("2", callback_data=f"response_group_2")],
+                    [InlineKeyboardButton(name1, callback_data=f"response_group_1")],
+                    [InlineKeyboardButton(name2, callback_data=f"response_group_2")],
                 ]
             if context.user_data['subject'] == 2:
                  keyboard = [
@@ -138,18 +151,38 @@ async def choose_group(message, user_id: int, context: ContextTypes.DEFAULT_TYPE
                     InlineKeyboardButton("8-9", callback_data=f"response_group_89")],
                 ]
             if context.user_data['subject'] == 3:
-                if context.user_data['grade'] == 9:
-                    keyboard = [
-                        [InlineKeyboardButton("1", callback_data=f"response_group_1"),
-                        InlineKeyboardButton("2", callback_data=f"response_group_2"),
-                        InlineKeyboardButton("3", callback_data=f"response_group_3"),
-                        InlineKeyboardButton("4", callback_data=f"response_group_4")],
+                match context.user_data['grade']:
+                    case 7:
+                        keyboard = [
+                        [InlineKeyboardButton("Среда, Кригер", callback_data=f"response_group_1")],
+                        [InlineKeyboardButton("Суббота, Киселевская", callback_data=f"response_group_2")],
+                        [InlineKeyboardButton("Суббота, Степанов", callback_data=f"response_group_3")]
                     ]
-                else:
-                  keyboard = [
-                        [InlineKeyboardButton("1", callback_data=f"response_group_1"),
-                        InlineKeyboardButton("2", callback_data=f"response_group_2"),
-                        InlineKeyboardButton("3", callback_data=f"response_group_3")],
+                    case 8:
+                        keyboard = [
+                        [InlineKeyboardButton("Понедельник, Кригер", callback_data=f"response_group_1")],
+                        [InlineKeyboardButton("Понедельник, Шадрин", callback_data=f"response_group_3")],
+                        [InlineKeyboardButton("Четверг, Киселевская", callback_data=f"response_group_2")]
+                    ]
+                    case 9:
+                        keyboard = [
+                        [InlineKeyboardButton("Вторник, Назарчук", callback_data=f"response_group_4")],
+                        [InlineKeyboardButton("Среда, Киселевский", callback_data=f"response_group_3")],
+                        [InlineKeyboardButton("Среда, Тихонов", callback_data=f"response_group_1")],
+                        [InlineKeyboardButton("Четверг, Тихонов", callback_data=f"response_group_2")]
+                        
+                    ]
+                    case 10:
+                        keyboard = [
+                        [InlineKeyboardButton("Пятница, Киселевский", callback_data=f"response_group_1")],
+                        [InlineKeyboardButton("Суббота, Киселевский", callback_data=f"response_group_2")],
+                        [InlineKeyboardButton("Суббота, Тихонов", callback_data=f"response_group_3")],
+                    ]    
+                    case 11:
+                        keyboard = [
+                        [InlineKeyboardButton("Вторник, Тихонов", callback_data=f"response_group_1")],
+                        [InlineKeyboardButton("Вторник, Еськин", callback_data=f"response_group_3")],
+                        [InlineKeyboardButton("Пятница, Тихонов", callback_data=f"response_group_2")]
                     ]
             reply_markup = InlineKeyboardMarkup(keyboard)
             await message.reply_text('Выберите группу', reply_markup=reply_markup)

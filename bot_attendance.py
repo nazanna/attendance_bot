@@ -48,7 +48,7 @@ async def send_reminders(bot):
         current_hour = now.strftime('%H')  # Часы
         current_minute = now.strftime('%M') 
         now_str = str(current_hour)+'.'+str(current_minute)
-        if now_str == "00.00":
+        if int(current_hour) % 2 == 0 and current_minute == "00":
             schedule_data = await make_timetable()
         if now_str in schedule_data:
             usernames = schedule_data[now_str]

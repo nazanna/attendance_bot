@@ -31,11 +31,11 @@ async def start(update: Update, context: CallbackContext):
     await identify_chat(user_id, chat_id, username)
     await choose_subject(update.message)
     if update.effective_user.username in ['andr_zhi', 'nazanna25'] and not started:
-        asyncio.create_task(send_reminders(context.bot))
+        asyncio.create_task(send_notifications(context.bot))
         started = True
 
 
-async def send_reminders(bot):
+async def send_notifications(bot):
     round_up = 5
     schedule_data = await make_timetable()
     now = datetime.now(pytz.timezone('Europe/Moscow'))

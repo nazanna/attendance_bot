@@ -51,10 +51,10 @@ async def send_reminders(bot):
         if int(current_hour) % 2 == 0 and current_minute == "00":
             schedule_data = await make_timetable()
         if now_str in schedule_data:
-            usernames = schedule_data[now_str]
-            for username in usernames:
-                await bot.send_message(chat_id=username, text='Отметьте посещаемость на занятии! Для этого нужно нажать /start')
-                await bot.send_message(chat_id='966497557', text=f'Я отправил сообщение {username}')
+            user_ids = schedule_data[now_str]
+            for user_id in user_ids:
+                await bot.send_message(chat_id=user_id, text='Отметьте посещаемость на занятии! Для этого нужно нажать /start')
+                await bot.send_message(chat_id='966497557', text=f'Я отправил сообщение {user_id}')
         next_check = now + timedelta(minutes=round_up)
         next_check_time = next_check.replace(second=0, microsecond=0, minute=(next_check.minute // round_up) * round_up)
         await asyncio.sleep((next_check_time - now).total_seconds())  # Check every 5 minutes

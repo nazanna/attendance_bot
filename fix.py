@@ -3,18 +3,20 @@ from telegram import Update
 from telegram.ext import Updater, CommandHandler, MessageHandler, filters, CallbackContext, ConversationHandler, \
     ApplicationBuilder
 from google_sheets_api import GoogleSheetsAPI
+from helpers import parse_sheet_name, save_attendance
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 # Define the states for the conversation
 WAITING_FOR_MESSAGE = 0
 
-EXPECTED_FORMAT = r'^([а-яА-ЯёЁ]+)\s+([а-яА-ЯёЁ]+)\s+([а-яА-ЯёЁ0-9_]+)\s+(Да|Нет)$'
+EXPECTED_FORMAT = r'^([а-яА-ЯёЁ]+)\s+([а-яА-ЯёЁ]+)\s+(Да|Нет)$'
 
 
 async def fix(update: Update, context: CallbackContext) -> int:
     """Start the fix command and ask for the user's message."""
     await update.message.reply_text(
-        '''Введите данные ученика, посещаемость которого вы хотите исправить. \
-Сделайте это в следующем формате: "Фамилия Имя Группа Да/Нет" \
-(в зависимости от того, посетил ученик занятие или нет). Например: Иванов Иван 8_2 Нет. \
+        '''Введите данные ученика, посещаемость которого вы хотите исправить. \n
+Сделайте это в следующем формате: "Фамилия Имя Да/Нет" \
+(в зависимости от того, посетил ученик занятие или нет). Например: Иванов Иван Нет. \n
 Обратите внимание, что фамилия и имя ученика должны точно совпадать с тем, как они записаны в списке.''')
     return WAITING_FOR_MESSAGE
 
@@ -22,7 +24,7 @@ async def fix(update: Update, context: CallbackContext) -> int:
 async def index_of_student_in_group(group, first_name, last_name) -> int:
     fullname = f'{last_name} {first_name}'
     api = GoogleSheetsAPI()
-    students = api.get_list_of_students(group)
+    students = await api.get_list_of_students(group)
     try:
         return students.index(fullname)
     except ValueError:
@@ -37,15 +39,20 @@ async def check_message(update: Update, context: CallbackContext) -> int:
     if match:
         last_name = match.group(1)
         first_name = match.group(2)
-        group = match.group(3)
-        new_value = match.group(4) 
+        group = await parse_sheet_name(context)
+        new_value = match.group(3) 
         index_of_student = await index_of_student_in_group(group, first_name, last_name)
         if index_of_student == -1:
-            await update.message.reply_text("Такого ученика или группы не существует")
+            await update.message.reply_text("Такого ученика не существует, пожалуйста, проверьте правильность написания")
         else:
-            api = GoogleSheetsAPI()
-            api.update_last_attendance(group, index_of_student + 2, 1 if new_value=="Да" else 0)
-            await update.message.reply_text("Исправлено!")
+            await save_attendance(update.effective_user.id, index_of_student, f'{last_name} {first_name}', 1 if new_value=="Да" else 0)
+            keyboard = [
+                [InlineKeyboardButton("Хватит", callback_data=f"confirm_attendance_update"),
+                InlineKeyboardButton("Исправить еще", callback_data=f"fix_attendance")],
+            ]
+            reply_markup = InlineKeyboardMarkup(keyboard)
+
+            await update.message.reply_text("Исправлено!", reply_markup=reply_markup)
     else:
         await update.message.reply_text("Пожалуйста, повторите отправку сообщения в правильном формате.")
 

@@ -10,7 +10,6 @@ cursor.execute('''
 CREATE TABLE IF NOT EXISTS attendance (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     user_id INTEGER,
-    username TEXT,
     question_index INTEGER,
     name TEXT,
     answer INTEGER,  

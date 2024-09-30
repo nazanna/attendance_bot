@@ -94,21 +94,24 @@ class GoogleSheetsAPI:
             print(err)
 
 
-    async def update_last_attendance(self, sheet_name: str, index: int, new_value: int):
+    async def update_last_attendance(self, group_name: str, attendance: list):
         try:
             service = build("sheets", "v4", credentials=self.creds)
-            column_to_insert_attendance = await self._get_last_filled_column(sheet_name)
+            column_to_insert_attendance = await self._get_last_filled_column(group_name)
+            print(f"last filled column is {column_to_insert_attendance} AHAHAHAHAHHAHHAHHA")
+            attendance_range = f'{group_name}!{column_to_insert_attendance}:{column_to_insert_attendance}'
+            attendance_formatted = [[datetime.now().strftime("%d %m")]] + [[str(a)] for a in attendance]
             service.spreadsheets().values().update(
                 spreadsheetId=self.SPREADSHEET_ID,
-                range=f'{sheet_name}!{column_to_insert_attendance}{index}',
+                range=attendance_range,
                 valueInputOption='RAW',  # or 'USER_ENTERED'
                 body={
-                    'values': [[new_value]]
+                    'values': attendance_formatted
                 }
             ).execute()
         except HttpError as err:
             print(err)
-
+            
     async def _index_to_column_letter(self, index):
         letter = ''
         while index > 0:

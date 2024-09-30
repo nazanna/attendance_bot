@@ -14,7 +14,9 @@ from lockbox import get_lockbox_secret
 from constants import token_key, started, workdir
 import asyncio
 from google_sheets_api import GoogleSheetsAPI
-
+from helpers import parse_sheet_name
+from fix import fix
+from helpers import save_attendance
 
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
                     level=logging.WARNING)
@@ -34,7 +36,7 @@ async def start(update: Update, context: CallbackContext):
 
 
 async def send_reminders(bot):
-    round_up = 1
+    round_up = 5
     schedule_data = await make_timetable()
     now = datetime.now(pytz.timezone('Europe/Moscow'))
     next_check = now + timedelta(minutes=round_up)
@@ -186,33 +188,10 @@ async def choose_group(message, user_id: int, context: ContextTypes.DEFAULT_TYPE
             reply_markup = InlineKeyboardMarkup(keyboard)
             await message.reply_text('Выберите группу', reply_markup=reply_markup)
 
-async def make_sheet_name(context):
-    subject = context.user_data['subject']
-    match subject:
-        case 1:
-            grade = context.user_data['grade']
-            group = context.user_data['group']
-            sheet_name = str(grade)+'_'+str(group)
-        case 2:
-            group = context.user_data['group']
-            if group == 7:
-                sheet_name='7_баз_прак'
-            else:
-                sheet_name = '8_9_баз_прак'
-        case 3:
-            grade = context.user_data['grade']
-            group = context.user_data['group']
-            sheet_name = str(grade)+'_ол_прак_'+str(group)
-        case 4:
-            sheet_name = 'Механика'
-        case 5:
-            sheet_name = 'Преподготовка к IPhO'
-    return sheet_name
-
 
 async def make_list_kids(context):
     api = GoogleSheetsAPI()
-    return await api.get_list_of_students(await make_sheet_name(context))
+    return await api.get_list_of_students(await parse_sheet_name(context))
 
 
 async def check_attendance(message, user_id: int, context: ContextTypes.DEFAULT_TYPE):
@@ -226,20 +205,19 @@ async def check_attendance(message, user_id: int, context: ContextTypes.DEFAULT_
     await message.reply_text(questions[question_index], reply_markup=reply_markup)
 
 
-async def save_attendance(user_id, username, question_index, name, answer):
-    conn = sqlite3.connect(f'{workdir}/attendance.db')
-    cursor = conn.cursor()
-    cursor.execute('''
-            INSERT INTO attendance (user_id, username, question_index, name, answer) 
-            VALUES (?, ?, ?, ?, ?)
-            ''', (user_id, username, question_index, name, answer))
-    conn.commit()
-    conn.close()
+async def suggest_fixes(attendance_list, message, context: ContextTypes.DEFAULT_TYPE):
+    keyboard = [
+                [InlineKeyboardButton("Все верно", callback_data=f"confirm_attendance_save"),
+                InlineKeyboardButton("Исправить", callback_data=f"fix_attendance")],
+            ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    answer = """Вот получившийся список посещаемости. Проверьте его, пожалуйста, и нажмите соответствующую кнопку в конце сообщения.\n"""
+    for att in attendance_list:
+        answer += att + '\n'
+    await message.reply_text(answer, reply_markup=reply_markup)
 
 
-async def make_norm_data(context, user_id):
-    sheet_name = await make_sheet_name(context)
-    current_date_str = datetime.now().strftime("%d %m")
+async def get_attendance_of_current_group(context, user_id):
     conn = sqlite3.connect(f'{workdir}/attendance.db')
     cursor = conn.cursor()
     names = context.user_data['list']
@@ -257,67 +235,92 @@ async def make_norm_data(context, user_id):
         if result:
             answer = result[0]
         att.append(answer)
-    api = GoogleSheetsAPI()
-    await api.insert_attendance(sheet_name, att)
     conn.close()
-    print(current_date_str)
+    return names, att
+
+
+async def save_attendance_to_google_sheets(context, user_id):
+    _, attendance = await get_attendance_of_current_group(context, user_id)
+    sheet_name = await parse_sheet_name(context)
+    api = GoogleSheetsAPI()
+    await api.insert_attendance(sheet_name, attendance)
+
+async def update_attendance_to_google_sheets(context, user_id):
+    _, attendance = await get_attendance_of_current_group(context, user_id)
+    sheet_name = await parse_sheet_name(context)
+    api = GoogleSheetsAPI()
+    await api.update_last_attendance(sheet_name, attendance)
 
 
 async def button(update: Update, context: CallbackContext):
     query = update.callback_query
     user_id = update.effective_user.id
-    username = update.effective_user.username
     await query.answer()
+    if query.data == "confirm_attendance_save":
+        await save_attendance_to_google_sheets(context, user_id)
+        await query.message.reply_text("Спасибо, что отметили посещаемость! Этот котик очень этому рад!")
+        with open(f"{workdir}/final.jpg", "rb") as image:
+            await query.message.reply_photo(photo=image)
 
-    data = query.data.split("_")
-    question = (data[1])
-    response = int(data[2])
+    elif query.data == "confirm_attendance_update":
+        await save_attendance_to_google_sheets(context, user_id)
+        await query.message.reply_text("Спасибо, что отметили посещаемость! Этот котик очень этому рад!")
+        with open(f"{workdir}/final.jpg", "rb") as image:
+            await query.message.reply_photo(photo=image)
 
-    match question:
-        case 'subject':
-            context.user_data['subject'] = response
-            match response:
-                case 1:
-                    await choose_grade(query.message, user_id, context)
-                case 3:
-                    await choose_grade(query.message, user_id, context)
-                case 2:
+    
+    elif query.data == "fix_attendance":
+        await query.message.reply_text("Нажмите на команду /fix, чтобы исправить посещаемость.")
+
+    else:
+        data = query.data.split("_")
+        question = (data[1])
+        response = int(data[2])
+
+        match question:
+            case 'subject':
+                context.user_data['subject'] = response
+                match response:
+                    case 1:
+                        await choose_grade(query.message, user_id, context)
+                    case 3:
+                        await choose_grade(query.message, user_id, context)
+                    case 2:
+                        await choose_group(query.message, user_id, context)
+                    case 4:
+                        context.user_data['question_index'] = 0
+                        context.user_data['list'] = await make_list_kids(context)
+                        await check_attendance(query.message, user_id, context)
+                    case 5:
+                        context.user_data['question_index'] = 0
+                        context.user_data['list'] = await make_list_kids(context)
+                        await check_attendance(query.message, user_id, context)
+
+            case 'grade':
+                context.user_data['grade'] = response
+                if response == 11 and context.user_data['subject']==1:
+                    context.user_data['question_index'] = 0
+                    context.user_data['group'] = 1
+                    await check_attendance(query.message, user_id, context)
+                else:
                     await choose_group(query.message, user_id, context)
-                case 4:
-                    context.user_data['question_index'] = 0
-                    context.user_data['list'] = await make_list_kids(context)
-                    await check_attendance(query.message, user_id, context)
-                case 5:
-                    context.user_data['question_index'] = 0
-                    context.user_data['list'] = await make_list_kids(context)
-                    await check_attendance(query.message, user_id, context)
 
-        case 'grade':
-            context.user_data['grade'] = response
-            if response == 11 and context.user_data['subject']==1:
+            case 'group':
+                context.user_data['group'] = response
                 context.user_data['question_index'] = 0
-                context.user_data['group'] = 1
+                context.user_data['list'] = await make_list_kids(context)
                 await check_attendance(query.message, user_id, context)
-            else:
-                await choose_group(query.message, user_id, context)
-
-        case 'group':
-            context.user_data['group'] = response
-            context.user_data['question_index'] = 0
-            context.user_data['list'] = await make_list_kids(context)
-            await check_attendance(query.message, user_id, context)
-        
-        case _:
-            await save_attendance(user_id, username, int(question), context.user_data['list'][int(question)], int(response))
-            context.user_data['question_index'] += 1
-            if context.user_data['question_index']<len(context.user_data['list']):
-                await check_attendance(query.message, user_id, context)
-            else: 
-                await query.message.reply_text("Спасибо, что отметили посещаемость! Этот котик очень этому рад!")
-                with open(f"{workdir}/final.jpg", "rb") as image:
-                    await query.message.reply_photo(photo=image)
-                await make_norm_data(context, user_id)
-        
+            
+            case _:
+                await save_attendance(user_id, int(question), context.user_data['list'][int(question)], int(response))
+                context.user_data['question_index'] += 1
+                if context.user_data['question_index'] < len(context.user_data['list']):
+                    await check_attendance(query.message, user_id, context)
+                else:                 
+                    names, attendance = await get_attendance_of_current_group(context, user_id)
+                    attendance_list = [f'{name} {"Да" if a == 1 else "Нет"}' for name, a in zip(names, attendance)]
+                    await suggest_fixes(attendance_list, query.message, context)
+            
 
 def main():
     token = get_lockbox_secret(token_key)

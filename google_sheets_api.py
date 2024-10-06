@@ -1,4 +1,4 @@
-import os.path
+import asyncio
 from datetime import datetime
 
 from google.auth.transport.requests import Request
@@ -6,7 +6,8 @@ from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
-from constants import workdir
+from constants import workdir, GOOGLE_SHEET_ATTENDANCE_ID
+from google.oauth2 import service_account
 
 class GoogleSheetsAPI:
     # If modifying these scopes, delete the file token.json.
@@ -16,26 +17,14 @@ class GoogleSheetsAPI:
     
     RANGE_OF_NAMES = "A:B"
 
-    def __init__(self, id="1xmhcDN0bROVfcnCFm2y7-VNnsgjtzhuwcWmMpmGjlK8"):
+    def __init__(self, id=GOOGLE_SHEET_ATTENDANCE_ID):
         creds = None
         self.SPREADSHEET_ID = id
-        # The file token.json stores the user's access and refresh tokens, and is
-        # created automatically when the authorization flow completes for the first
-        # time.
-        if os.path.exists(f"{workdir}/token.json"):
-            creds = Credentials.from_authorized_user_file(f"{workdir}/token.json", self.SCOPES)
-        # If there are no (valid) credentials available, let the user log in.
-        if not creds or not creds.valid:
-            if creds and creds.expired and creds.refresh_token:
+        if not creds:
+            creds = service_account.Credentials.from_service_account_file(f"{workdir}/credentials.json").with_scopes(self.SCOPES)
+            if not creds.valid:
                 creds.refresh(Request())
-            else:
-                flow = InstalledAppFlow.from_client_secrets_file(
-                    f"{workdir}/credentials.json", self.SCOPES
-                )
-                creds = flow.run_local_server(port=0)
-            # Save the credentials for the next run
-            with open(f"{workdir}/token.json", "w") as token:
-                token.write(creds.to_json())
+            print(creds.valid)
         self.creds = creds
 
     async def get_list_of_students(self, group_name: str):
@@ -85,7 +74,7 @@ class GoogleSheetsAPI:
             service.spreadsheets().values().update(
                 spreadsheetId=self.SPREADSHEET_ID,
                 range=attendance_range,
-                valueInputOption='RAW',  # or 'USER_ENTERED'
+                valueInputOption='RAW',
                 body={
                     'values': attendance_formatted
                 }
@@ -98,13 +87,12 @@ class GoogleSheetsAPI:
         try:
             service = build("sheets", "v4", credentials=self.creds)
             column_to_insert_attendance = await self._get_last_filled_column(group_name)
-            print(f"last filled column is {column_to_insert_attendance} AHAHAHAHAHHAHHAHHA")
             attendance_range = f'{group_name}!{column_to_insert_attendance}:{column_to_insert_attendance}'
             attendance_formatted = [[datetime.now().strftime("%d %m")]] + [[str(a)] for a in attendance]
             service.spreadsheets().values().update(
                 spreadsheetId=self.SPREADSHEET_ID,
                 range=attendance_range,
-                valueInputOption='RAW',  # or 'USER_ENTERED'
+                valueInputOption='RAW',
                 body={
                     'values': attendance_formatted
                 }
@@ -142,12 +130,3 @@ class GoogleSheetsAPI:
 
     async def _get_last_filled_column(self, group_name: str):
         return await self._index_to_column_letter(await self._get_first_empty_column_index(group_name) - 1)
-
-# def main():
-#     api = GoogleSheetsAPI()
-#     # print(api.get_list_of_students(class_number=8, group_number=2))
-#     print(api.insert_attendance("8_2", [1, 1, 0]))
-
-
-# if __name__ == "__main__":
-#     main()

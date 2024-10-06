@@ -3,9 +3,10 @@ from telegram import Update
 from telegram.ext import Updater, CommandHandler, MessageHandler, filters, CallbackContext, ConversationHandler, \
     ApplicationBuilder
 from google_sheets_api import GoogleSheetsAPI
-from helpers import parse_sheet_name, save_attendance
+from helpers import parse_sheet_name
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-# Define the states for the conversation
+from db import AttendanceDB
+
 WAITING_FOR_MESSAGE = 0
 
 EXPECTED_FORMAT = r'^([а-яА-ЯёЁ]+)\s+([а-яА-ЯёЁ]+)\s+(Да|Нет)$'
@@ -45,7 +46,7 @@ async def check_message(update: Update, context: CallbackContext) -> int:
         if index_of_student == -1:
             await update.message.reply_text("Такого ученика не существует, пожалуйста, проверьте правильность написания")
         else:
-            await save_attendance(update.effective_user.id, index_of_student, f'{last_name} {first_name}', 1 if new_value=="Да" else 0)
+            await AttendanceDB.save_attendance_to_database(update.effective_user.id, index_of_student, update.message.message_id, f'{last_name} {first_name}', 1 if new_value=="Да" else 0)
             keyboard = [
                 [InlineKeyboardButton("Хватит", callback_data=f"confirm_attendance_update"),
                 InlineKeyboardButton("Исправить еще", callback_data=f"fix_attendance")],

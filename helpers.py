@@ -1,7 +1,3 @@
-import sqlite3
-from constants import workdir
-
-
 async def parse_sheet_name(context):
     subject = context.user_data['subject']
     match subject:
@@ -24,14 +20,3 @@ async def parse_sheet_name(context):
         case 5:
             sheet_name = 'Преподготовка к IPhO'
     return sheet_name
-
-
-async def save_attendance(user_id, question_index, name, answer):
-    conn = sqlite3.connect(f'{workdir}/attendance.db')
-    cursor = conn.cursor()
-    cursor.execute('''
-            INSERT INTO attendance (user_id, question_index, name, answer) 
-            VALUES (?, ?, ?, ?)
-            ''', (user_id, question_index, name, answer))
-    conn.commit()
-    conn.close()

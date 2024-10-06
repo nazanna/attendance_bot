@@ -1,5 +1,4 @@
 import sqlite3
-import aiosqlite
 from functools import wraps
 from constants import workdir
 

@@ -1,7 +1,6 @@
 import re
 from telegram import Update
-from telegram.ext import Updater, CommandHandler, MessageHandler, filters, CallbackContext, ConversationHandler, \
-    ApplicationBuilder
+from telegram.ext import CommandHandler, MessageHandler, filters, CallbackContext, ConversationHandler
 from google_sheets_api import GoogleSheetsAPI
 from helpers import parse_sheet_name
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup

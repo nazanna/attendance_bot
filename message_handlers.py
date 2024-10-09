@@ -164,7 +164,7 @@ async def update_message(chat_id, message_id, student_index, response, context: 
     if previous_attendance == response:
         return
     attendance_symbol = "✅" if response == 1 else "❌"
-    new_text = f'{attendance_symbol} {context.user_data['students_list'][student_index]}'
+    new_text = f"{attendance_symbol} {context.user_data['students_list'][student_index]}"
     keyboard = [
             [InlineKeyboardButton("Присутствует", callback_data=f"response_{student_index}_1"),
             InlineKeyboardButton("Отсутствует", callback_data=f"response_{student_index}_0")],

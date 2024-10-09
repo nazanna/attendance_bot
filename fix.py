@@ -13,12 +13,14 @@ EXPECTED_FORMAT = r'^([а-яА-ЯёЁ]+)\s+([а-яА-ЯёЁ]+)\s+(Да|Нет)$'
 
 async def fix(update: Update, context: CallbackContext) -> int:
     """Start the fix command and ask for the user's message."""
-    await update.message.reply_text(
-        '''Введите данные ученика, посещаемость которого вы хотите исправить. \n
-Сделайте это в следующем формате: "Фамилия Имя Да/Нет" \
-(в зависимости от того, посетил ученик занятие или нет). Например: Иванов Иван Нет. \n
-Обратите внимание, что фамилия и имя ученика должны точно совпадать с тем, как они записаны в списке.''')
-    return WAITING_FOR_MESSAGE
+    keyboard = [
+                [InlineKeyboardButton("Все верно", callback_data=f"confirm_attendance_update")
+                ],
+            ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    answer = '''Исправьте посещаемость, нажав на кнопку возле ученика. После этого подтвердите исправление кнопкой снизу'''
+    await update.message.reply_text(answer, reply_markup=reply_markup)
+
 
 
 async def index_of_student_in_group(group, first_name, last_name) -> int:

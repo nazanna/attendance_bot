@@ -2,6 +2,7 @@ from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes, CallbackContext
 from enum import Enum
 from google_sheets_api import GoogleSheetsAPI
+from google_drive_api import GoogleDriveAPI
 from helpers import parse_sheet_name
 from constants import workdir
 from db import AttendanceDB
@@ -172,4 +173,14 @@ async def update_message(chat_id, message_id, student_index, response, context: 
     reply_markup = InlineKeyboardMarkup(keyboard)
 
     await context.bot.edit_message_text(chat_id=chat_id, message_id=message_id, text=new_text, reply_markup=reply_markup)
+
+async def react_to_photos(update: Update, context: CallbackContext):
+    photo = update.message.photo[-1]
+    api_dr = GoogleDriveAPI()
+    
+    photo_file = await photo.get_file()
+    filename = f'received_image_{photo_file.file_id}.jpg'
+    await photo_file.download_to_drive(filename)
+    await context.bot.send_message(text="Спасибо за фото! А еще, пожалуйста, отметьте посещаемость на занятии! Для этого нужно нажать /start", chat_id= update.effective_user.id)
+    await api_dr.save_photo(filename)
 

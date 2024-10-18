@@ -4,7 +4,7 @@ import pytz
 from datetime import datetime
 import pandas as pd
 from telegram import Update
-from telegram.ext import ApplicationBuilder, CommandHandler, CallbackContext
+from telegram.ext import ApplicationBuilder, CommandHandler, CallbackContext, MessageHandler, filters
 from datetime import datetime, timedelta
 from fix import fix_handler
 from telegram import Update
@@ -15,7 +15,7 @@ import asyncio
 from google_sheets_api import GoogleSheetsAPI
 from helpers import parse_sheet_name
 from message_handlers import Subject, choose_subject, handle_fix_buttons, choose_group, choose_grade, \
-    check_attendance, update_message, complete_attendance_checking
+    check_attendance, update_message, complete_attendance_checking, react_to_photos
 from db import AttendanceDB
 
 
@@ -54,7 +54,7 @@ async def send_notifications(bot):
         if now_str in schedule_data:
             user_ids = schedule_data[now_str]
             for user_id in user_ids:
-                await bot.send_message(chat_id=user_id, text='Отметьте посещаемость на занятии! Для этого нужно нажать /start')
+                await bot.send_message(chat_id=user_id, text='Сделайте фото группы и отправьте в этот чат')
                 await bot.send_message(chat_id='966497557', text=f'Я отправил сообщение {user_id}')
         next_check = now + timedelta(minutes=sleep_duration)
         next_check_time = next_check.replace(second=0, microsecond=0, minute=(next_check.minute // sleep_duration) * sleep_duration)
@@ -176,8 +176,8 @@ def main():
     app.add_handler(CommandHandler('start', start))
     app.add_handler(fix_handler)
     app.add_handler(CallbackQueryHandler(button))
+    app.add_handler(MessageHandler(filters.PHOTO, react_to_photos))
     app.run_polling()
-
     app.idle()
 
 if __name__ == '__main__':

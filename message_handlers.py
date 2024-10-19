@@ -179,8 +179,10 @@ async def react_to_photos(update: Update, context: CallbackContext):
     api_dr = GoogleDriveAPI()
     
     photo_file = await photo.get_file()
+
     filename = f'received_image_{photo_file.file_id}.jpg'
-    await photo_file.download_to_drive(filename)
+    filename_dir = f'{workdir}/{filename}'
+    await photo_file.download_to_drive(filename_dir)
     await context.bot.send_message(text="Спасибо за фото! А еще, пожалуйста, отметьте посещаемость на занятии! Для этого нужно нажать /start", chat_id= update.effective_user.id)
     await api_dr.save_photo(filename)
 

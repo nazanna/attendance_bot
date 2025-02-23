@@ -1,4 +1,4 @@
-async def parse_sheet_name(context):
+async def parse_sheet_name_1_semester(context):
     subject = context.user_data['subject']
     match subject:
         case 1:
@@ -19,4 +19,11 @@ async def parse_sheet_name(context):
             sheet_name = 'Механика'
         case 5:
             sheet_name = 'Преподготовка к IPhO'
+    return sheet_name
+
+
+async def parse_sheet_name(context):
+    grade = context.user_data['grade']
+    group = context.user_data['group']
+    sheet_name = str(grade)+'-'+str(group)
     return sheet_name

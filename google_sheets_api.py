@@ -49,7 +49,7 @@ class GoogleSheetsAPI:
             sheet = service.spreadsheets()
             result = (
                 sheet.values()
-                .get(spreadsheetId=self.SPREADSHEET_ID, range=f'Sheet1!A:D')
+                .get(spreadsheetId=self.SPREADSHEET_ID, range=f'Рассылки_весна!A:D')
                 .execute()
             )
             students = result.get("values", [])

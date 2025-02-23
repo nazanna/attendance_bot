@@ -1,6 +1,7 @@
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes, CallbackContext
 from enum import Enum
+import random
 from google_sheets_api import GoogleSheetsAPI
 from google_drive_api import GoogleDriveAPI
 from helpers import parse_sheet_name
@@ -32,15 +33,39 @@ async def choose_grade(message, user_id: int, context: ContextTypes.DEFAULT_TYPE
             keyboard = [
                 [InlineKeyboardButton("7", callback_data=f"response_grade_7"),
                 InlineKeyboardButton("8", callback_data=f"response_grade_8"),
-                InlineKeyboardButton("9", callback_data=f"response_grade_9"),
-                InlineKeyboardButton("10", callback_data=f"response_grade_10"),
-                InlineKeyboardButton("11", callback_data=f"response_grade_11")],
+                # InlineKeyboardButton("9", callback_data=f"response_grade_9"),
+                # InlineKeyboardButton("10", callback_data=f"response_grade_10"),
+                # InlineKeyboardButton("11", callback_data=f"response_grade_11")
+                ],
             ]
             reply_markup = InlineKeyboardMarkup(keyboard)
             await message.reply_text('Выберите класс', reply_markup=reply_markup)
-
-
+            
+            
 async def choose_group(message, user_id: int, context: ContextTypes.DEFAULT_TYPE):
+    match context.user_data['grade']:
+        case 7:
+            name1='пн-ср'
+            name2='вт-чт'
+            name3='пн-чт'
+            name4='вт-пт'
+        case 8:
+            name1='ср-пт'
+            name2='пн-ср'
+            name3='вт-пт'
+            name4='вт-чт'
+    keyboard = [
+            [InlineKeyboardButton(name1, callback_data=f"response_group_1")],
+            [InlineKeyboardButton(name2, callback_data=f"response_group_2")],
+            [InlineKeyboardButton(name3, callback_data=f"response_group_3")],
+            [InlineKeyboardButton(name4, callback_data=f"response_group_4")],
+        ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    await message.reply_text('Выберите группу', reply_markup=reply_markup)    
+            
+
+
+async def choose_group_1_semester(message, user_id: int, context: ContextTypes.DEFAULT_TYPE):
     subject = Subject(context.user_data['subject'])
     if subject == Subject.PROF_SEMINAR:
         match context.user_data['grade']:
@@ -146,7 +171,9 @@ async def handle_fix_buttons(update: Update, context: CallbackContext):
     user_id = update.effective_user.id
     if query.data == "confirm_attendance_save":
         await query.message.reply_text("Спасибо, что отметили посещаемость! Этот котик очень этому рад!")
-        with open(f"{workdir}/final.jpg", "rb") as image:
+        n = random.randint(1, 4)
+        filename = f'{workdir}/final_{n}.jpg'
+        with open(filename, "rb") as image:
             await query.message.reply_photo(photo=image)
         await save_attendance_to_google_sheets(context, user_id)
 

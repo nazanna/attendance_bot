@@ -1,6 +1,7 @@
 import logging
 import sqlite3
 import pytz
+from datetime import date
 from datetime import datetime
 import pandas as pd
 from telegram import Update
@@ -30,7 +31,7 @@ async def start(update: Update, context: CallbackContext):
     context.user_data['last_message'] = update.message
     await update.message.reply_text("Здравствуйте!")
     await identify_chat(user_id, chat_id, username)
-    await choose_subject(update.message)
+    await choose_grade(update.message, user_id, context)
     if update.effective_user.username in ['andr_zhi', 'nazanna25'] and not started:
         asyncio.create_task(send_notifications(context.bot))
         started = True
@@ -55,13 +56,47 @@ async def send_notifications(bot):
             user_ids = schedule_data[now_str]
             for user_id in user_ids:
                 await bot.send_message(chat_id=user_id, text='Сделайте фото группы и отправьте в этот чат')
-                await bot.send_message(chat_id='966497557', text=f'Я отправил сообщение {user_id}')
         next_check = now + timedelta(minutes=sleep_duration)
         next_check_time = next_check.replace(second=0, microsecond=0, minute=(next_check.minute // sleep_duration) * sleep_duration)
         await asyncio.sleep((next_check_time - now).total_seconds())  # Check every 5 minutes
 
 
 async def make_timetable():
+    api = GoogleSheetsAPI(id = GOOGLE_SHEET_REMINDERS_SCHEDULE_ID)
+    timetamble = await api.get_timetable()
+    today = date.today()
+    df = pd.DataFrame(timetamble, columns=['day','name', 'time', 'username'])
+    today = datetime.now(pytz.timezone('Europe/Moscow')).strftime('%d.%m.%Y')
+    today_timetable = df[df['day']==today]
+    map_timetable_today = {}
+    print(today_timetable.iterrows())
+    for _, row in today_timetable.iterrows():
+        print(row)
+        if row['username']:
+            username = str(row['username'])[1:]
+            conn = sqlite3.connect(f'{workdir}/user_ids.db')
+            cursor = conn.cursor()
+            cursor.execute("""
+            SELECT chat_id
+            FROM ids 
+            WHERE username = ?
+            ORDER BY updated_at DESC
+            LIMIT 1
+        """, [username])
+            result = cursor.fetchone()
+            if result:
+                answer = result[0]
+
+                if row['time'] not in map_timetable_today:
+                    map_timetable_today[row['time']]=[answer]
+                else:
+                    map_timetable_today[row['time']].append(answer)
+    print('here')
+    print(map_timetable_today)
+    return map_timetable_today
+
+
+async def make_timetable_1_semester():
     api = GoogleSheetsAPI(id = GOOGLE_SHEET_REMINDERS_SCHEDULE_ID)
     timetamble = await api.get_timetable()
     df = pd.DataFrame(timetamble, columns=['day', 'time', 'name', 'username'])

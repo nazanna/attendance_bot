@@ -5,6 +5,7 @@ from telegram.ext import ContextTypes
 from datetime import datetime
 from constants import GOOGLE_SHEET_REMINDERS_SCHEDULE_ID, users_db_name
 from google_sheets_api import GoogleSheetsAPI
+from pytz import timezone
 
 REMINDER_MESSAGE = "Пожалуйста, заполните посещаемость (для этого надо нажать /start)"
 
@@ -35,12 +36,8 @@ def schedule_notifications(app):
         if result:
             chat_id = result[0]
 
-            when_to_send = datetime(day=int(current_day[0]), month=int(current_day[1]), year=int(current_day[2]), hour=int(current_time[0]), minute=int(current_time[1]))
-            if when_to_send >= datetime.now():
-                print(current_day, current_time, datetime.now())
-                print(row['username'], " scheduled! ", when_to_send)
-                app.job_queue.run_once(callback_message, when=when_to_send-datetime.now(), data = {'chat_id': chat_id})
-            
-            
-      
-
+            when_to_send = datetime(day=int(current_day[0]), month=int(current_day[1]), year=int(current_day[2]), hour=int(current_time[0]), minute=int(current_time[1]), tzinfo=timezone('Europe/Moscow'))
+            delta=when_to_send-datetime.now(tz=timezone('Europe/Moscow'))-timedelta(minutes=30)
+            if delta.total_seconds() > 0:
+                app.job_queue.run_once(callback_message, when=delta, data = {'chat_id': chat_id})
+                print(row['username'], " scheduled! ", when_to_send, "Will be sent in", delta.seconds)

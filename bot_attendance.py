@@ -1,24 +1,17 @@
 import logging
 import sqlite3
-import pytz
-from datetime import date
-from datetime import datetime
-import pandas as pd
 from telegram import Update
-from telegram.ext import ApplicationBuilder, CommandHandler, CallbackContext, MessageHandler, filters
-from datetime import datetime, timedelta
+from telegram.ext import ApplicationBuilder, CommandHandler, CallbackContext, CallbackQueryHandler, MessageHandler, filters
 from fix import fix_handler
 from telegram import Update
-from telegram.ext import ApplicationBuilder, CommandHandler, CallbackContext, CallbackQueryHandler
 from lockbox import get_lockbox_secret
-from constants import token_key, started, workdir, GOOGLE_SHEET_REMINDERS_SCHEDULE_ID
-import asyncio
+from constants import token_key, started, workdir
 from google_sheets_api import GoogleSheetsAPI
 from helpers import parse_sheet_name
-from message_handlers import Subject, choose_subject, handle_fix_buttons, choose_group, choose_grade, \
+from message_handlers import Subject, handle_fix_buttons, choose_group, choose_grade, \
     check_attendance, update_message, complete_attendance_checking, react_to_photos
 from db import AttendanceDB
-
+from notifications import schedule_notifications
 
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
                     level=logging.WARNING)
@@ -32,101 +25,6 @@ async def start(update: Update, context: CallbackContext):
     await update.message.reply_text("Здравствуйте!")
     await identify_chat(user_id, chat_id, username)
     await choose_grade(update.message, user_id, context)
-    if update.effective_user.username in ['andr_zhi', 'nazanna25'] and not started:
-        asyncio.create_task(send_notifications(context.bot))
-        started = True
-
-
-async def send_notifications(bot):
-    sleep_duration = 5 # wakes up every X minutes and sends notifications
-    schedule_data = await make_timetable()
-    now = datetime.now(pytz.timezone('Europe/Moscow'))
-    next_check = now + timedelta(minutes=sleep_duration)
-    next_check_time = next_check.replace(second=0, microsecond=0, minute=(next_check.minute // sleep_duration) * sleep_duration)
-    await asyncio.sleep((next_check_time - now).total_seconds()) 
-    print(schedule_data)
-    while True:
-        now = datetime.now(pytz.timezone('Europe/Moscow'))
-        current_hour = now.strftime('%H')
-        current_minute = now.strftime('%M')
-        now_str = str(current_hour)+'.'+str(current_minute)
-        if int(current_hour) % 2 == 0 and current_minute == "00":
-            schedule_data = await make_timetable()
-        if now_str in schedule_data:
-            user_ids = schedule_data[now_str]
-            for user_id in user_ids:
-                await bot.send_message(chat_id=user_id, text='Сделайте фото группы и отправьте в этот чат')
-        next_check = now + timedelta(minutes=sleep_duration)
-        next_check_time = next_check.replace(second=0, microsecond=0, minute=(next_check.minute // sleep_duration) * sleep_duration)
-        await asyncio.sleep((next_check_time - now).total_seconds())  # Check every 5 minutes
-
-
-async def make_timetable():
-    api = GoogleSheetsAPI(id = GOOGLE_SHEET_REMINDERS_SCHEDULE_ID)
-    timetamble = await api.get_timetable()
-    today = date.today()
-    df = pd.DataFrame(timetamble, columns=['day','name', 'time', 'username'])
-    today = datetime.now(pytz.timezone('Europe/Moscow')).strftime('%d.%m.%Y')
-    today_timetable = df[df['day']==today]
-    map_timetable_today = {}
-    print(today_timetable.iterrows())
-    for _, row in today_timetable.iterrows():
-        print(row)
-        if row['username']:
-            username = str(row['username'])[1:]
-            conn = sqlite3.connect(f'{workdir}/user_ids.db')
-            cursor = conn.cursor()
-            cursor.execute("""
-            SELECT chat_id
-            FROM ids 
-            WHERE username = ?
-            ORDER BY updated_at DESC
-            LIMIT 1
-        """, [username])
-            result = cursor.fetchone()
-            if result:
-                answer = result[0]
-
-                if row['time'] not in map_timetable_today:
-                    map_timetable_today[row['time']]=[answer]
-                else:
-                    map_timetable_today[row['time']].append(answer)
-    print('here')
-    print(map_timetable_today)
-    return map_timetable_today
-
-
-async def make_timetable_1_semester():
-    api = GoogleSheetsAPI(id = GOOGLE_SHEET_REMINDERS_SCHEDULE_ID)
-    timetamble = await api.get_timetable()
-    df = pd.DataFrame(timetamble, columns=['day', 'time', 'name', 'username'])
-    day_of_week = datetime.now(pytz.timezone('Europe/Moscow')).weekday()
-    days = ["пн", "вт", "ср", "чт", "пт", "сб", "вс"]
-    today = days[day_of_week]
-    today_timetable = df[df['day']==today]
-    map_timetable_today = {}
-    for _, row in today_timetable.iterrows():
-        if row['username']:
-            username = str(row['username'])[1:]
-            conn = sqlite3.connect(f'{workdir}/user_ids.db')
-            cursor = conn.cursor()
-            cursor.execute("""
-            SELECT chat_id
-            FROM ids 
-            WHERE username = ?
-            ORDER BY updated_at DESC
-            LIMIT 1
-        """, [username])
-            result = cursor.fetchone()
-            if result:
-                answer = result[0]
-
-                if row['time'] not in map_timetable_today:
-                    map_timetable_today[row['time']]=[answer]
-                else:
-                    map_timetable_today[row['time']].append(answer)
-    return map_timetable_today
-
 
 async def identify_chat(user_id, chat_id, username):
     conn = sqlite3.connect(f'{workdir}/user_ids.db')
@@ -143,8 +41,6 @@ async def identify_chat(user_id, chat_id, username):
 async def get_current_list_of_students(context):
     api = GoogleSheetsAPI()
     return await api.get_list_of_students(await parse_sheet_name(context))
-
-
 
 async def button(update: Update, context: CallbackContext):
     query = update.callback_query
@@ -207,6 +103,7 @@ async def button(update: Update, context: CallbackContext):
 def main():
     token = get_lockbox_secret(token_key)
     app = ApplicationBuilder().token(token).build()
+    schedule_notifications(app)
     print("Bot successfully started!")
     app.add_handler(CommandHandler('start', start))
     app.add_handler(fix_handler)

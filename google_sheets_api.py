@@ -43,7 +43,7 @@ class GoogleSheetsAPI:
         except HttpError as err:
             print(err)
 
-    async def get_timetable(self):
+    def get_timetable(self):
         try:
             service = build("sheets", "v4", credentials=self.creds)
             sheet = service.spreadsheets()

@@ -98,7 +98,16 @@ async def button(update: Update, context: CallbackContext):
                         await check_attendance(query.message, user_id, context)
                     else:                 
                         await complete_attendance_checking(query.message, context)
-            
+
+async def schedule(update: Update, context: CallbackContext):
+    if update.effective_user.username not in ['andr_zhi','nazanna25']:
+        return
+    await context.bot.send_message(text="Началось обновление уведомлений, подождите немного", chat_id= update.effective_user.id)
+
+    for job in context.job_queue.jobs():
+        job.schedule_removal()
+    schedule_notifications(context)
+    await context.bot.send_message(text="Уведомления успешно обновлены!", chat_id= update.effective_user.id)
 
 def main():
     token = get_lockbox_secret(token_key)
@@ -106,6 +115,7 @@ def main():
     schedule_notifications(app)
     print("Bot successfully started!")
     app.add_handler(CommandHandler('start', start))
+    app.add_handler(CommandHandler('schedule', schedule))
     app.add_handler(fix_handler)
     app.add_handler(CallbackQueryHandler(button))
     app.add_handler(MessageHandler(filters.PHOTO, react_to_photos))

@@ -21,7 +21,6 @@ class GoogleSheetsAPI:
             creds = service_account.Credentials.from_service_account_file(f"{workdir}/credentials.json").with_scopes(self.SCOPES)
             if not creds.valid:
                 creds.refresh(Request())
-            print(creds.valid)
         self.creds = creds
 
     async def get_list_of_students(self, group_name: str):

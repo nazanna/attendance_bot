@@ -3,3 +3,6 @@
 __pycache__
 *.db
 *.json
+/bin
+/lib
+/lib64

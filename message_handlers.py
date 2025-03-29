@@ -45,15 +45,15 @@ async def choose_grade(message, user_id: int, context: ContextTypes.DEFAULT_TYPE
 async def choose_group(message, user_id: int, context: ContextTypes.DEFAULT_TYPE):
     match context.user_data['grade']:
         case 7:
-            name1='пн-ср'
-            name2='вт-чт'
-            name3='пн-чт'
-            name4='вт-пт'
+            name1='7-1'
+            name2='7-2'
+            name3='7-3'
+            name4='7-4'
         case 8:
-            name1='ср-пт'
-            name2='пн-ср'
-            name3='вт-пт'
-            name4='вт-чт'
+            name1='8-1'
+            name2='8-2'
+            name3='8-3'
+            name4='8-4'
     keyboard = [
             [InlineKeyboardButton(name1, callback_data=f"response_group_1")],
             [InlineKeyboardButton(name2, callback_data=f"response_group_2")],
